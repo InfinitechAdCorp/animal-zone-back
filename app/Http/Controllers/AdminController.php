@@ -2,141 +2,68 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\User;
 use App\Models\SellerVerification;
+use App\Models\Product;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 
 class AdminController extends Controller
 {
-    /**
-     * Get all seller verification applications
-     */
-    public function getSellerApplications(Request $request)
+    public function statistics()
     {
-        $status = $request->query('status', 'all'); // all, pending, approved, rejected
-        
-        $query = SellerVerification::with('seller');
-        
-        if ($status !== 'all') {
-            $query->where('status', $status);
-        }
-        
-        $applications = $query->orderBy('created_at', 'desc')->get();
-        
         return response()->json([
-            'success' => true,
-            'data' => $applications
+            'total_users'       => User::count(),
+            'total_sellers'     => SellerVerification::count(),
+            'pending_sellers'   => SellerVerification::where('status', 'pending')->count(),
+            'approved_today'    => SellerVerification::where('status', 'approved')
+                                    ->whereDate('reviewed_at', now()->toDateString())
+                                    ->count(),
+            'approved_sellers'  => SellerVerification::where('status', 'approved')->count(),
         ]);
     }
 
-    /**
-     * Get single seller verification details
-     */
-    public function getSellerApplication($id)
+    // ✅ List all products (with seller + category info)
+    public function products()
     {
-        $application = SellerVerification::with('seller', 'reviewer')->findOrFail($id);
-        
-        return response()->json([
-            'success' => true,
-            'data' => $application
-        ]);
+        $products = Product::with(['seller', 'productCategory', 'petTypes'])->get();
+
+        return response()->json($products);
     }
 
-    /**
-     * Approve seller application
-     */
-    public function approveSeller(Request $request, $id)
-    {
-        $request->validate([
-            'remarks' => 'nullable|string|max:500',
-        ]);
+public function updateProductStatus(Request $request, $id)
+{
+    $product = Product::findOrFail($id);
 
-        $verification = SellerVerification::findOrFail($id);
-        
-        $verification->status = 'approved';
-        $verification->reviewed_by = $request->user()->id; // Assumes admin is authenticated
-        $verification->reviewed_at = now();
-        $verification->remarks = $request->remarks;
-        $verification->save();
+    $request->validate([
+        'status' => 'required|in:approved,rejected',
+    ]);
 
-        // Update user role to confirmed seller
-        $verification->seller->update(['role' => 'verified_seller']);
+    $product->status = $request->status;
+    $product->save();
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Seller application approved successfully',
-            'data' => $verification
-        ]);
+    return response()->json([
+        'message' => "Product {$request->status} successfully!",
+        'product' => $product,
+    ]);
+}
+
+public function getPendingProducts()
+{
+    $products = Product::where('status', 'pending')->with('documents')->get();
+    return response()->json($products);
+}
+
+public function getProducts(Request $request)
+{
+    $status = $request->query('status');
+    $query = Product::with('documents');
+
+    if ($status) {
+        $query->where('status', $status);
     }
 
-    /**
-     * Reject seller application
-     */
-    public function rejectSeller(Request $request, $id)
-    {
-        $request->validate([
-            'remarks' => 'required|string|max:500',
-        ]);
+    return response()->json($query->get());
+}
 
-        $verification = SellerVerification::findOrFail($id);
-        
-        $verification->status = 'rejected';
-        $verification->reviewed_by = $request->user()->id;
-        $verification->reviewed_at = now();
-        $verification->remarks = $request->remarks;
-        $verification->save();
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Seller application rejected',
-            'data' => $verification
-        ]);
-    }
-
-    /**
-     * Get statistics for dashboard
-     */
-    public function getStatistics()
-    {
-        $stats = [
-            'pending_sellers' => SellerVerification::where('status', 'pending')->count(),
-            'approved_sellers' => SellerVerification::where('status', 'approved')->count(),
-            'rejected_sellers' => SellerVerification::where('status', 'rejected')->count(),
-            'total_sellers' => SellerVerification::count(),
-            'approved_today' => SellerVerification::where('status', 'approved')
-                ->whereDate('reviewed_at', today())
-                ->count(),
-        ];
-
-        return response()->json([
-            'success' => true,
-            'data' => $stats
-        ]);
-    }
-
-    /**
-     * Download/view uploaded document
-     */
-    public function viewDocument($id, $documentType)
-    {
-        $verification = SellerVerification::findOrFail($id);
-        
-        $allowedTypes = [
-            'gov_id', 'selfie_with_id', 'proof_of_address',
-            'dti_sec', 'mayors_permit', 'bir_certificate',
-            'fda_certificate', 'product_labels'
-        ];
-        
-        if (!in_array($documentType, $allowedTypes)) {
-            return response()->json(['error' => 'Invalid document type'], 400);
-        }
-        
-        $filePath = $verification->$documentType;
-        
-        if (!$filePath || !file_exists(public_path($filePath))) {
-            return response()->json(['error' => 'Document not found'], 404);
-        }
-        
-        return response()->file(public_path($filePath));
-    }
 }
