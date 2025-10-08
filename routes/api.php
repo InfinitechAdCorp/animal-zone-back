@@ -13,6 +13,12 @@ use App\Models\ProductCategory;
 use App\Http\Controllers\CartController;
 use App\Http\Controllers\DeliveryInfoController;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\OrderController;
+
+Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/orders', [OrderController::class, 'store']);
+});
+
 
 Route::middleware('auth:sanctum')->prefix('user')->group(function () {
     Route::get('/profile', [UserController::class, 'show']);
