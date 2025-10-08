@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Str;
 
 class Product extends Model
 {
@@ -10,7 +11,8 @@ class Product extends Model
         'seller_id',
         'name',
         'brand',
-        'product_category_id', // ✅ use correct column
+        'slug',
+        'product_category_id', 
         'sku',
         'description',
         'ingredients',
@@ -20,6 +22,8 @@ class Product extends Model
         'weight',
         'status'
     ];
+
+    
 
     // 🔹 The SELLER who uploaded the product
     public function seller()
@@ -44,5 +48,18 @@ class Product extends Model
     {
         return $this->hasMany(ProductImage::class);
     }
+
+    protected static function booted()
+    {
+        static::creating(function ($product) {
+            $product->slug = Str::slug($product->name) . '-' . uniqid();
+        });
+    }
+    
+        public function documents()
+    {
+        return $this->hasMany(ProductDocument::class);
+    }
+
 
 }

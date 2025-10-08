@@ -10,7 +10,39 @@ use Illuminate\Foundation\Auth\EmailVerificationRequest;
 use App\Http\Controllers\Auth\VerifyEmailController;
 use Illuminate\Http\Request;
 use App\Models\ProductCategory;
+use App\Http\Controllers\CartController;
+use App\Http\Controllers\DeliveryInfoController;
+use App\Http\Controllers\UserController;
 
+Route::middleware('auth:sanctum')->prefix('user')->group(function () {
+    Route::get('/profile', [UserController::class, 'show']);
+    Route::patch('/profile', [UserController::class, 'update']);
+});
+
+Route::middleware('auth:sanctum')->prefix('seller')->group(function () {
+    Route::get('/products', [SellerController::class, 'getSellerProducts']);
+    Route::patch('/products/{id}/status', [SellerController::class, 'updateProductStatus']);
+});
+
+
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/delivery-info', [DeliveryInfoController::class, 'show']);
+    Route::post('/delivery-info', [DeliveryInfoController::class, 'storeOrUpdate']);
+});
+
+Route::get('/product-categories', function () {
+    return ProductCategory::all();
+});
+
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/cart', [CartController::class, 'index']);
+    Route::post('/cart', [CartController::class, 'store']);
+    Route::patch('/cart/{id}', [CartController::class, 'update']); // ✅ for + / -
+    Route::delete('/cart/{id}', [CartController::class, 'destroy']); // ✅ for delete
+});
+
+Route::get('/sellers/slug/{slug}', [SellerController::class, 'getSellerInfoBySlug']);
+Route::get('/sellers/slug/{slug}/products', [SellerController::class, 'getSellerProductsBySlug']);
 
 // Public: product categories & pet types
 Route::get('/product-categories', function () {
@@ -23,7 +55,8 @@ Route::get('/pet-types', function () {
 
 
 Route::get('/products', [ProductController::class, 'index']);
-Route::get('/products/{id}', [ProductController::class, 'show']);
+Route::get('/products/{slug}', [ProductController::class, 'show']);
+
 
 // Email verification
 Route::get('/email/verify/{id}/{hash}', [VerifyEmailController::class, 'verify'])

@@ -17,13 +17,21 @@ class User extends Authenticatable implements MustVerifyEmail
      *
      * @var list<string>
      */
-    protected $fillable = [
-        'name',
-        'email',
-        'contact_number',
-        'password',
-        'role', // ✅ allow mass assignment of role
-    ];
+        protected $fillable = [
+            'name',
+            'slug',
+            'email',
+            'contact_number',
+            'password',
+            'role',
+            'region',
+            'province',
+            'city',
+            'barangay',
+            'street_address',
+            'postal_code', // ✅ add this
+        ];
+
 
     /**
      * The attributes that should be hidden for serialization.
@@ -44,7 +52,7 @@ class User extends Authenticatable implements MustVerifyEmail
     {
         return [
             'email_verified_at' => 'datetime',
-            'password' => 'hashed', // ✅ uses Laravel's built-in hashing
+            'password' => 'hashed',
         ];
     }
 
@@ -55,4 +63,18 @@ class User extends Authenticatable implements MustVerifyEmail
     {
         return $this->hasOne(SellerVerification::class, 'seller_id');
     }
+
+    /**
+     * Relationship: a seller has many products
+     */
+    public function products()
+    {
+        return $this->hasMany(Product::class, 'seller_id');
+    }
+
+    public function deliveryInfo()
+    {
+        return $this->hasOne(DeliveryInfo::class);
+    }
+
 }

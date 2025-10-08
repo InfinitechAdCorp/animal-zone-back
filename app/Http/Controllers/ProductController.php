@@ -14,25 +14,57 @@ use Illuminate\Support\Facades\Log;
 class ProductController extends Controller
 {
 
-    public function show($id)
+   public function show($slug)
 {
-    $product = Product::with(['seller', 'productCategory', 'petTypes', 'images'])
+    $product = Product::with(['seller', 'productCategory', 'petTypes', 'images', 'documents'])
         ->where('status', 'approved')
-        ->findOrFail($id);
+        ->where('slug', $slug)
+        ->firstOrFail();
 
-    return [
+    return response()->json([
         'id' => $product->id,
+        'slug' => $product->slug,
         'name' => $product->name,
         'price' => $product->price,
         'stock' => $product->stock,
-        'seller' => $product->seller?->name ?? 'Unknown Seller',
-        'category' => $product->productCategory?->name ?? 'Uncategorized',
-        'petTypes' => $product->petTypes->pluck('name'),
-        'images' => $product->images->pluck('image_path') ?? [],
-        'description' => $product->description,
+        'inStock' => $product->stock > 0,
         'brand' => $product->brand,
-    ];
+        'description' => $product->description,
+        'ingredients' => $product->ingredients,
+        'weight' => $product->weight,
+        'expiration_date' => $product->expiration_date,
+
+        'seller' => [
+            'id' => $product->seller?->id,
+            'name' => $product->seller?->name ?? 'Unknown Seller',
+            'slug' => $product->seller?->slug,
+
+            // ✅ Add location fields here
+            'region' => $product->seller?->region,
+            'province' => $product->seller?->province,
+            'city' => $product->seller?->city,
+            'barangay' => $product->seller?->barangay,
+            'street_address' => $product->seller?->street_address,
+        ],
+
+        'product_category' => [
+            'id' => $product->productCategory?->id,
+            'name' => $product->productCategory?->name ?? 'Uncategorized',
+        ],
+
+        'pet_types' => $product->petTypes->map(fn($type) => [
+            'id' => $type->id,
+            'name' => $type->name,
+        ]),
+
+        'images' => $product->images->pluck('image_path'),
+        'documents' => $product->documents->map(fn($doc) => [
+            'document_type' => $doc->document_type,
+            'file_path' => $doc->file_path,
+        ]),
+    ]);
 }
+
 
     public function store(Request $request)
     {
@@ -151,6 +183,7 @@ class ProductController extends Controller
         return $products->map(function ($product) {
             return [
                 'id' => $product->id,
+                'slug' => $product->slug,
                 'name' => $product->name,
                 'price' => $product->price,
                 'stock' => $product->stock,
