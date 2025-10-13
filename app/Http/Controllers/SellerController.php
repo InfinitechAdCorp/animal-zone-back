@@ -7,6 +7,7 @@ use App\Models\SellerVerification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use App\Models\Product;
+use App\Models\SellerPaymentMethod;
 
 class SellerController extends Controller
 {
@@ -323,6 +324,109 @@ public function getSellerProductsBySlug($slug)
             ];
         })
     );
+}
+
+public function getPaymentQRCodes($id)
+{
+    $seller = User::where('id', $id)
+        ->where('role', 'seller')
+        ->firstOrFail();
+
+    // Base path for default images
+    $basePath = asset('uploads/qr');
+
+    return response()->json([
+        'gcash_qr' => $seller->gcash_qr
+            ? asset($seller->gcash_qr)
+            : "{$basePath}/gcash1.jpg",
+
+        'paymaya_qr' => $seller->paymaya_qr
+            ? asset($seller->paymaya_qr)
+            : "{$basePath}/maya1.png",
+
+        'bpi_qr' => $seller->bpi_qr
+            ? asset($seller->bpi_qr)
+            : "{$basePath}/bpi1.png",
+
+        'bdo_qr' => $seller->bdo_qr
+            ? asset($seller->bdo_qr)
+            : "{$basePath}/bdo_1.png",
+    ]);
+}
+public function updatePaymentMethods(Request $request)
+{
+    $seller = $request->user();
+    $methods = ['gcash', 'paymaya', 'bpi', 'bdo'];
+
+    foreach ($methods as $method) {
+        $enabled = $request->boolean("{$method}_enabled");
+        $fileField = "{$method}_qr";
+
+        $record = \App\Models\SellerPaymentMethod::firstOrNew([
+            'seller_id' => $seller->id,
+            'method' => $method,
+        ]);
+
+        $record->enabled = $enabled;
+
+        if ($request->hasFile($fileField)) {
+            $file = $request->file($fileField);
+            $filename = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
+            $path = $file->move(public_path('uploads/payment_qr'), $filename);
+
+            if ($record->qr_path && file_exists(public_path($record->qr_path))) {
+                @unlink(public_path($record->qr_path));
+            }
+
+            $record->qr_path = 'uploads/payment_qr/' . $filename;
+        }
+
+        $record->save();
+    }
+
+    // ✅ Reload seller with payment methods AND sellerVerification
+    $seller->load(['paymentMethods', 'sellerVerification']);
+
+    // ✅ Build response with complete data (same structure as /me endpoint)
+    $verificationStatus = optional($seller->sellerVerification)->status ?? 'pending';
+    $documents = null;
+
+    if ($seller->sellerVerification) {
+        $documents = [
+            'gov_id'          => $seller->sellerVerification->gov_id,
+            'selfie_with_id'  => $seller->sellerVerification->selfie_with_id,
+            'proof_of_address'=> $seller->sellerVerification->proof_of_address,
+            'dti_sec'         => $seller->sellerVerification->dti_sec,
+            'mayors_permit'   => $seller->sellerVerification->mayors_permit,
+            'bir_certificate' => $seller->sellerVerification->bir_certificate,
+            'fda_certificate' => $seller->sellerVerification->fda_certificate,
+            'product_labels'  => $seller->sellerVerification->product_labels,
+        ];
+    }
+
+    return response()->json([
+        'message' => 'Payment methods updated successfully.',
+        'seller' => [
+            'id'                  => $seller->id,
+            'name'                => $seller->name,
+            'email'               => $seller->email,
+            'contact_number'      => $seller->contact_number,
+            'role'                => $seller->role,
+            'verification_status' => $verificationStatus,
+            'documents'           => $documents,
+            'gcash_qr'            => $seller->gcash_qr,
+            'paymaya_qr'          => $seller->paymaya_qr,
+            'bpi_qr'              => $seller->bpi_qr,
+            'bdo_qr'              => $seller->bdo_qr,
+            'payment_methods'     => $seller->paymentMethods,
+        ],
+    ]);
+}
+
+public function getPaymentMethods(Request $request)
+{
+    $seller = $request->user();
+    return response()->json($seller->paymentMethods);
 }
 
 }

@@ -7,6 +7,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Models\Cart;
 
 class User extends Authenticatable implements MustVerifyEmail
 {
@@ -17,21 +18,24 @@ class User extends Authenticatable implements MustVerifyEmail
      *
      * @var list<string>
      */
-        protected $fillable = [
-            'name',
-            'slug',
-            'email',
-            'contact_number',
-            'password',
-            'role',
-            'region',
-            'province',
-            'city',
-            'barangay',
-            'street_address',
-            'postal_code', // ✅ add this
-        ];
-
+    protected $fillable = [
+        'name',
+        'slug',
+        'email',
+        'contact_number',
+        'password',
+        'role',
+        'region',
+        'province',
+        'city',
+        'barangay',
+        'street_address',
+        'postal_code',
+        'gcash_qr',
+        'paymaya_qr',
+        'bpi_qr',
+        'bdo_qr',
+    ];
 
     /**
      * The attributes that should be hidden for serialization.
@@ -72,9 +76,26 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(Product::class, 'seller_id');
     }
 
+    /**
+     * Relationship: a user has one delivery info
+     */
     public function deliveryInfo()
     {
         return $this->hasOne(DeliveryInfo::class);
     }
 
+    /**
+     * ✅ Relationship: a user has many cart items
+     */
+    public function cartItems()
+    {
+        return $this->hasMany(Cart::class, 'user_id');
+    }
+
+    public function paymentMethods()
+{
+    return $this->hasMany(SellerPaymentMethod::class, 'seller_id');
+}
+
+    
 }

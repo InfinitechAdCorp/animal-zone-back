@@ -73,7 +73,7 @@ class AuthController extends Controller
     public function me(Request $request)
 {
     $user = $request->user();
-
+    
     if (!$user) {
         return response()->json(['message' => 'Unauthenticated'], 401);
     }
@@ -84,7 +84,7 @@ class AuthController extends Controller
     if ($user->role === 'seller') {
         $verification = $user->sellerVerification;
         $verificationStatus = optional($verification)->status ?? 'pending';
-
+        
         if ($verification) {
             $documents = [
                 'gov_id'          => $verification->gov_id,
@@ -97,6 +97,9 @@ class AuthController extends Controller
                 'product_labels'  => $verification->product_labels,
             ];
         }
+
+        // ✅ Load payment methods relationship for sellers
+        $user->load('paymentMethods');
     }
 
     return response()->json([
@@ -106,9 +109,19 @@ class AuthController extends Controller
         'contact_number'      => $user->contact_number,
         'role'                => $user->role,
         'verification_status' => $verificationStatus,
-        'documents'           => $documents, // 🔑 added here
+        'documents'           => $documents,
+        
+        // 🧩 Payment QR paths from users table (for backward compatibility)
+        'gcash_qr'   => $user->gcash_qr,
+        'paymaya_qr' => $user->paymaya_qr,
+        'bpi_qr'     => $user->bpi_qr,
+        'bdo_qr'     => $user->bdo_qr,
+        
+        // ✅ Payment methods from seller_payment_methods table (new structure)
+        'payment_methods' => $user->role === 'seller' ? $user->paymentMethods : null,
     ]);
 }
+
 public function register(Request $request)
 {
     $request->validate([

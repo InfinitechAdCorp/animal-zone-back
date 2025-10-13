@@ -15,9 +15,24 @@ use App\Http\Controllers\DeliveryInfoController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\OrderController;
 
+
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/orders', [OrderController::class, 'getBuyerOrders']); // ✅ Buyer order history
+});
+
+
+Route::middleware('auth:sanctum')->prefix('seller')->group(function () {
+    Route::get('/orders', [OrderController::class, 'getSellerOrders']);
+    Route::patch('/orders/{id}/status', [OrderController::class, 'updateStatus']);
+});
+
+
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/orders', [OrderController::class, 'store']);
+    Route::patch('/orders/{id}/cancel', [OrderController::class, 'cancel']);
 });
+
+Route::get('/sellers/{id}/payment-qrs', [SellerController::class, 'getPaymentQRCodes']);
 
 
 Route::middleware('auth:sanctum')->prefix('user')->group(function () {
@@ -28,6 +43,8 @@ Route::middleware('auth:sanctum')->prefix('user')->group(function () {
 Route::middleware('auth:sanctum')->prefix('seller')->group(function () {
     Route::get('/products', [SellerController::class, 'getSellerProducts']);
     Route::patch('/products/{id}/status', [SellerController::class, 'updateProductStatus']);
+    Route::post('/payment-methods', [SellerController::class, 'updatePaymentMethods']);
+      Route::get('/payment-methods', [SellerController::class, 'getPaymentMethods']);
 });
 
 
@@ -109,4 +126,5 @@ Route::middleware('auth:sanctum')->get('/me', [AuthController::class, 'me']);
 // Seller product upload
 Route::middleware('auth:sanctum')->prefix('seller')->group(function () {
     Route::post('/products', [ProductController::class, 'store']);
+    
 });
