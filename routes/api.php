@@ -15,6 +15,10 @@ use App\Http\Controllers\DeliveryInfoController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\OrderController;
 
+Route::get('/pet-types', function () {
+    return \App\Models\Category::all();
+});
+
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/orders', [OrderController::class, 'getBuyerOrders']); // ✅ Buyer order history
@@ -71,11 +75,6 @@ Route::get('/sellers/slug/{slug}/products', [SellerController::class, 'getSeller
 Route::get('/product-categories', function () {
     return ProductCategory::all();
 });
-
-Route::get('/pet-types', function () {
-    return Category::all(); // ibabalik lahat ng rows sa `categories` table (Dog, Cat, Bird, etc.)
-});
-
 
 Route::get('/products', [ProductController::class, 'index']);
 Route::get('/products/{slug}', [ProductController::class, 'show']);

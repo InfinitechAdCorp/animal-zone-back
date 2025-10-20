@@ -110,15 +110,20 @@ class AuthController extends Controller
         'role'                => $user->role,
         'verification_status' => $verificationStatus,
         'documents'           => $documents,
-        
-        // 🧩 Payment QR paths from users table (for backward compatibility)
-        'gcash_qr'   => $user->gcash_qr,
-        'paymaya_qr' => $user->paymaya_qr,
-        'bpi_qr'     => $user->bpi_qr,
-        'bdo_qr'     => $user->bdo_qr,
-        
-        // ✅ Payment methods from seller_payment_methods table (new structure)
-        'payment_methods' => $user->role === 'seller' ? $user->paymentMethods : null,
+        'gcash_qr'            => $user->gcash_qr,
+        'paymaya_qr'          => $user->paymaya_qr,
+        'bpi_qr'              => $user->bpi_qr,
+        'bdo_qr'              => $user->bdo_qr,
+
+        // ✅ Safe mapped version
+        'payment_methods' => $user->role === 'seller'
+            ? $user->paymentMethods->map(fn($m) => [
+                'id' => $m->id,
+                'method' => $m->method,
+                'enabled' => $m->enabled,
+                'qr_path' => $m->qr_path,
+            ])
+            : null,
     ]);
 }
 
