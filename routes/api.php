@@ -15,10 +15,50 @@ use App\Http\Controllers\DeliveryInfoController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\OrderController;
 
-Route::get('/pet-types', function () {
-    return \App\Models\Category::all();
+Route::middleware('auth:sanctum')->prefix('user')->group(function () {
+    Route::get('/profile', [UserController::class, 'show']);
+    Route::patch('/profile', [UserController::class, 'update']);
 });
 
+// ✅ Pet Types
+Route::get('/pet-types', function () {
+    return Category::all();
+});
+
+Route::middleware('auth:sanctum')->post('/pet-types', function (Request $request) {
+    $validated = $request->validate([
+        'name' => 'required|string|max:255|unique:categories,name',
+    ]);
+
+    $petType = Category::create([
+        'name' => $validated['name'],
+    ]);
+
+    return response()->json([
+        'message' => 'Pet type created successfully',
+        'data' => $petType,
+    ], 201);
+});
+
+// ✅ Product Categories
+Route::get('/product-categories', function () {
+    return ProductCategory::all();
+});
+
+Route::middleware('auth:sanctum')->post('/product-categories', function (Request $request) {
+    $validated = $request->validate([
+        'name' => 'required|string|max:255|unique:product_categories,name',
+    ]);
+
+    $category = ProductCategory::create([
+        'name' => $validated['name'],
+    ]);
+
+    return response()->json([
+        'message' => 'Product category created successfully',
+        'data' => $category,
+    ], 201);
+});
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/orders', [OrderController::class, 'getBuyerOrders']); // ✅ Buyer order history
@@ -55,10 +95,6 @@ Route::middleware('auth:sanctum')->prefix('seller')->group(function () {
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/delivery-info', [DeliveryInfoController::class, 'show']);
     Route::post('/delivery-info', [DeliveryInfoController::class, 'storeOrUpdate']);
-});
-
-Route::get('/product-categories', function () {
-    return ProductCategory::all();
 });
 
 Route::middleware('auth:sanctum')->group(function () {
@@ -110,7 +146,7 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
  Route::patch('/products/{id}/status', [AdminController::class, 'updateProductStatus']);
  Route::get('/admin/products/pending', [AdminController::class, 'getPendingProducts']);
 
-
+ Route::get('/products/{id}/documents', [AdminController::class, 'getProductDocuments']);
 });
 
 // Seller documents

@@ -19,10 +19,7 @@ class UserController extends Controller
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
-        return response()->json([
-            'success' => true,
-            'data' => $user
-        ]);
+       return response()->json($user);
     }
 
     /**
