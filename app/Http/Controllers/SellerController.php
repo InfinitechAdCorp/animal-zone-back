@@ -12,64 +12,38 @@ use App\Models\SellerPaymentMethod;
 class SellerController extends Controller
 {
 
-public function getSellerProducts(Request $request)
-{
-    $user = Auth::user();
-    $status = $request->query('status');
 
-    $query = Product::where('seller_id', $user->id)
-                    ->with('productCategory')
-                    ->orderBy('created_at', 'desc');
 
-    if ($status) {
-        $query->where('status', strtolower($status)); // normalize case
+public function updateOrderStatus(Request $request, $id)
+    {
+        $request->validate([
+            'status' => 'required|in:pending,processing,shipped,delivered,cancelled',
+        ]);
+
+        $seller = Auth::user();
+
+        if (!$seller || $seller->role !== 'seller') {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        // Ensure seller owns at least one item in this order
+        $hasItem = OrderItem::where('order_id', $id)
+            ->where('seller_id', $seller->id)
+            ->exists();
+
+        if (!$hasItem) {
+            return response()->json(['message' => 'You do not have permission to update this order.'], 403);
+        }
+
+        $order = Order::findOrFail($id);
+        $order->status = $request->status;
+        $order->save();
+
+        return response()->json([
+            'message' => 'Order status updated successfully.',
+            'order' => $order,
+        ]);
     }
-
-    $products = $query->get()->map(function ($product) {
-        return [
-            'id' => $product->id,
-            'name' => $product->name,
-            'category' => $product->productCategory?->name,
-            'price' => $product->price,
-            'stock' => $product->stock,
-            'status' => strtolower($product->status), // consistent format
-            'dateAdded' => $product->created_at->format('m/d/Y'),
-        ];
-    });
-
-    // ✅ Normalize all status checks to lowercase
-    $statusCounts = [
-        'pending' => Product::where('seller_id', $user->id)->whereRaw('LOWER(status) = ?', ['pending'])->count(),
-        'approved' => Product::where('seller_id', $user->id)->whereRaw('LOWER(status) = ?', ['approved'])->count(),
-        'rejected' => Product::where('seller_id', $user->id)->whereRaw('LOWER(status) = ?', ['rejected'])->count(),
-        'outOfStock' => Product::where('seller_id', $user->id)->where('stock', '<=', 0)->count(),
-    ];
-
-    return response()->json([
-        'data' => $products,
-        'counts' => $statusCounts,
-    ]);
-}
-
-
-public function updateProductStatus(Request $request, $id)
-{
-    $request->validate([
-        'status' => 'required|in:Pending,Approved,Rejected'
-    ]);
-
-    $product = Product::where('id', $id)
-                      ->where('seller_id', Auth::id())
-                      ->firstOrFail();
-
-    $product->status = $request->status;
-    $product->save();
-
-    return response()->json([
-        'message' => 'Product status updated successfully.',
-        'data' => $product,
-    ]);
-}
 
 
     public function register(Request $request)
@@ -295,6 +269,39 @@ public function getSellerInfoBySlug($slug)
     ]);
 }
 
+public function getSellerProducts(Request $request)
+{
+    $seller = $request->user();
+    $status = $request->query('status');
+
+    $query = Product::where('seller_id', $seller->id)
+        ->with(['productCategory', 'petTypes', 'images']);
+
+    if ($status && in_array($status, ['pending', 'approved', 'rejected', 'out_of_stock'])) {
+        if ($status === 'out_of_stock') {
+            $query->where('stock', '<=', 0);
+        } else {
+            $query->where('status', $status);
+        }
+    }
+
+    $products = $query->orderBy('created_at', 'desc')->get();
+
+    // ✅ Count totals by status
+    $counts = [
+        'pending' => Product::where('seller_id', $seller->id)->where('status', 'pending')->count(),
+        'approved' => Product::where('seller_id', $seller->id)->where('status', 'approved')->count(),
+        'rejected' => Product::where('seller_id', $seller->id)->where('status', 'rejected')->count(),
+        'outOfStock' => Product::where('seller_id', $seller->id)->where('stock', '<=', 0)->count(),
+    ];
+
+    return response()->json([
+        'data' => $products,
+        'counts' => $counts,
+    ]);
+}
+
+
 // ✅ Get products by seller slug
 public function getSellerProductsBySlug($slug)
 {
@@ -328,31 +335,53 @@ public function getSellerProductsBySlug($slug)
 
 public function getPaymentQRCodes($id)
 {
-    $seller = User::where('id', $id)
-        ->where('role', 'seller')
-        ->firstOrFail();
+    $seller = User::find($id);
 
-    // Base path for default images
-    $basePath = asset('uploads/qr');
+    if (!$seller) {
+        return response()->json(['message' => 'Seller not found'], 404);
+    }
 
+    // ✅ Get from seller_payment_methods table
+    $methods = SellerPaymentMethod::where('seller_id', $seller->id)->get();
+
+    // ✅ Build array of enabled methods with QR paths
+    $qrs = [];
+    foreach ($methods as $method) {
+        if ($method->enabled && $method->qr_path) {
+            $qrs[$method->method] = asset($method->qr_path); // ✅ full URL
+        }
+    }
+
+    // ✅ Return only existing and enabled payment methods
     return response()->json([
-        'gcash_qr' => $seller->gcash_qr
-            ? asset($seller->gcash_qr)
-            : "{$basePath}/gcash1.jpg",
-
-        'paymaya_qr' => $seller->paymaya_qr
-            ? asset($seller->paymaya_qr)
-            : "{$basePath}/maya1.png",
-
-        'bpi_qr' => $seller->bpi_qr
-            ? asset($seller->bpi_qr)
-            : "{$basePath}/bpi1.png",
-
-        'bdo_qr' => $seller->bdo_qr
-            ? asset($seller->bdo_qr)
-            : "{$basePath}/bdo_1.png",
+        'seller_id' => $seller->id,
+        'payment_qrs' => $qrs,
     ]);
 }
+
+public function updateProduct(Request $request, $id)
+{
+    $seller = $request->user();
+
+    $product = Product::where('id', $id)
+        ->where('seller_id', $seller->id)
+        ->firstOrFail();
+
+    $validated = $request->validate([
+        'name' => 'required|string|max:255',
+        'price' => 'required|numeric|min:0',
+        'stock' => 'required|integer|min:0',
+    ]);
+
+    $product->update($validated);
+
+    return response()->json([
+        'message' => 'Product updated successfully.',
+        'product' => $product,
+    ]);
+}
+
+
 public function updatePaymentMethods(Request $request)
 {
     $seller = $request->user();
@@ -369,38 +398,50 @@ public function updatePaymentMethods(Request $request)
 
         $record->enabled = $enabled;
 
+        // ✅ Handle file upload if provided
         if ($request->hasFile($fileField)) {
             $file = $request->file($fileField);
-            $filename = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
-            $path = $file->move(public_path('uploads/payment_qr'), $filename);
 
+            // Generate unique filename
+            $filename = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
+
+            // Ensure directory exists
+            $uploadPath = public_path('uploads/payment_qr');
+            if (!file_exists($uploadPath)) {
+                mkdir($uploadPath, 0777, true);
+            }
+
+            // Move file to uploads/payment_qr/
+            $file->move($uploadPath, $filename);
+
+            // ✅ Delete old QR file if exists
             if ($record->qr_path && file_exists(public_path($record->qr_path))) {
                 @unlink(public_path($record->qr_path));
             }
 
+            // Save relative path to DB
             $record->qr_path = 'uploads/payment_qr/' . $filename;
         }
 
         $record->save();
     }
 
-    // ✅ Reload seller with payment methods AND sellerVerification
+    // ✅ Reload seller with payment methods and verification
     $seller->load(['paymentMethods', 'sellerVerification']);
 
-    // ✅ Build response with complete data (same structure as /me endpoint)
     $verificationStatus = optional($seller->sellerVerification)->status ?? 'pending';
     $documents = null;
 
     if ($seller->sellerVerification) {
         $documents = [
-            'gov_id'          => $seller->sellerVerification->gov_id,
-            'selfie_with_id'  => $seller->sellerVerification->selfie_with_id,
-            'proof_of_address'=> $seller->sellerVerification->proof_of_address,
-            'dti_sec'         => $seller->sellerVerification->dti_sec,
-            'mayors_permit'   => $seller->sellerVerification->mayors_permit,
-            'bir_certificate' => $seller->sellerVerification->bir_certificate,
-            'fda_certificate' => $seller->sellerVerification->fda_certificate,
-            'product_labels'  => $seller->sellerVerification->product_labels,
+            'gov_id'           => $seller->sellerVerification->gov_id,
+            'selfie_with_id'   => $seller->sellerVerification->selfie_with_id,
+            'proof_of_address' => $seller->sellerVerification->proof_of_address,
+            'dti_sec'          => $seller->sellerVerification->dti_sec,
+            'mayors_permit'    => $seller->sellerVerification->mayors_permit,
+            'bir_certificate'  => $seller->sellerVerification->bir_certificate,
+            'fda_certificate'  => $seller->sellerVerification->fda_certificate,
+            'product_labels'   => $seller->sellerVerification->product_labels,
         ];
     }
 
@@ -414,14 +455,11 @@ public function updatePaymentMethods(Request $request)
             'role'                => $seller->role,
             'verification_status' => $verificationStatus,
             'documents'           => $documents,
-            'gcash_qr'            => $seller->gcash_qr,
-            'paymaya_qr'          => $seller->paymaya_qr,
-            'bpi_qr'              => $seller->bpi_qr,
-            'bdo_qr'              => $seller->bdo_qr,
             'payment_methods'     => $seller->paymentMethods,
         ],
     ]);
 }
+
 
 public function getPaymentMethods(Request $request)
 {

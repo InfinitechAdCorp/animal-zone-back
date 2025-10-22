@@ -89,6 +89,7 @@ Route::middleware('auth:sanctum')->prefix('seller')->group(function () {
     Route::patch('/products/{id}/status', [SellerController::class, 'updateProductStatus']);
     Route::post('/payment-methods', [SellerController::class, 'updatePaymentMethods']);
       Route::get('/payment-methods', [SellerController::class, 'getPaymentMethods']);
+       Route::post('/products/{id}', [SellerController::class, 'updateProduct']);
 });
 
 

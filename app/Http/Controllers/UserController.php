@@ -12,15 +12,18 @@ class UserController extends Controller
      * ✅ Get current authenticated user profile
      */
     public function show()
-    {
-        $user = Auth::user();
+{
+    $user = Auth::user();
 
-        if (!$user) {
-            return response()->json(['message' => 'Unauthorized'], 401);
-        }
-
-       return response()->json($user);
+    if (!$user) {
+        return response()->json(['message' => 'Unauthorized'], 401);
     }
+
+    return response()->json([
+        'data' => $user
+    ]);
+}
+
 
     /**
      * ✅ Update user profile
